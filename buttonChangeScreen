@@ -15,17 +15,14 @@ int amplitudes[numPoints];
 bool highPassMode = false;
 bool lastStableButton = HIGH;
 
-int measureAmplitude(int pin, int samples) {
-  int minVal = 1023;
-  int maxVal = 0;
+int measureAverage(int pin, int samples) {
+  long total = 0;
 
   for (int i = 0; i < samples; i++) {
-    int v = analogRead(pin);
-    if (v < minVal) minVal = v;
-    if (v > maxVal) maxVal = v;
+    total += analogRead(pin);
   }
 
-  return maxVal - minVal;
+  return total / samples;
 }
 
 void showModeMessage() {
@@ -54,14 +51,22 @@ void drawGraph() {
     u8g2.drawStr(38, 8, "LOW PASS");
   }
 
-  int maxAmp = 800;  // fixed scale
+  int minAmp = 1023;
+  int maxAmp = 0;
+
+  for (int i = 0; i < numPoints; i++) {
+    if (amplitudes[i] < minAmp) minAmp = amplitudes[i];
+    if (amplitudes[i] > maxAmp) maxAmp = amplitudes[i];
+  }
+
+  if (maxAmp == minAmp) maxAmp = minAmp + 1;
 
   for (int i = 0; i < numPoints - 1; i++) {
     int x1 = 10 + (i * 117) / (numPoints - 1);
     int x2 = 10 + ((i + 1) * 117) / (numPoints - 1);
 
-    int y1 = 60 - map(amplitudes[i], 0, maxAmp, 0, 48);
-    int y2 = 60 - map(amplitudes[i + 1], 0, maxAmp, 0, 48);
+    int y1 = 60 - map(amplitudes[i], minAmp, maxAmp, 0, 48);
+    int y2 = 60 - map(amplitudes[i + 1], minAmp, maxAmp, 0, 48);
 
     y1 = constrain(y1, 12, 60);
     y2 = constrain(y2, 12, 60);
@@ -118,7 +123,7 @@ void loop() {
     tone(signalPin, freq);
     delay(20);
 
-    amplitudes[i] = measureAmplitude(readPin, 200);
+    amplitudes[i] = measureAverage(readPin, 100);
 
     noTone(signalPin);
     delay(5);
