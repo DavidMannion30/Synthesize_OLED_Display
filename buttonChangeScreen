@@ -1,0 +1,40 @@
+#include <Arduino.h>
+#include <U8g2lib.h>
+#include <SPI.h>
+
+U8G2_SSD1306_128X64_NONAME_F_4W_HW_SPI u8g2(U8G2_R0, 10, 9, 8);
+
+const int buttonPin = 2;
+bool highPassMode = false;
+bool lastButtonState = HIGH;
+
+void drawScreen() {
+  u8g2.clearBuffer();
+  u8g2.setFont(u8g2_font_6x10_tr);
+
+  if (highPassMode) {
+    u8g2.drawStr(20, 20, "HIGH PASS MODE");
+  } else {
+    u8g2.drawStr(20, 20, "LOW PASS MODE");
+  }
+
+  u8g2.sendBuffer();
+}
+
+void setup() {
+  u8g2.begin();
+  pinMode(buttonPin, INPUT_PULLUP);
+  drawScreen();
+}
+
+void loop() {
+  bool currentButtonState = digitalRead(buttonPin);
+
+  if (lastButtonState == HIGH && currentButtonState == LOW) {
+    highPassMode = !highPassMode;
+    drawScreen();
+    delay(300);
+  }
+
+  lastButtonState = currentButtonState;
+}
