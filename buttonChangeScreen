@@ -13,15 +13,13 @@ const int numPoints = 64;
 int amplitudes[numPoints];
 
 bool highPassMode = false;
-bool lastStableButton = HIGH;
+bool lastButtonState = HIGH;
 
 int measureAverage(int pin, int samples) {
   long total = 0;
-
   for (int i = 0; i < samples; i++) {
     total += analogRead(pin);
   }
-
   return total / samples;
 }
 
@@ -30,12 +28,24 @@ void showModeMessage() {
   u8g2.setFont(u8g2_font_6x10_tr);
 
   if (highPassMode) {
-    u8g2.drawStr(30, 30, "HIGH PASS");
+    u8g2.drawStr(20, 30, "HIGH PASS");
   } else {
-    u8g2.drawStr(32, 30, "LOW PASS");
+    u8g2.drawStr(24, 30, "LOW PASS");
   }
 
   u8g2.sendBuffer();
+}
+
+void checkButton() {
+  bool currentButtonState = digitalRead(buttonPin);
+
+  if (lastButtonState == HIGH && currentButtonState == LOW) {
+    highPassMode = !highPassMode;
+    showModeMessage();
+    delay(300);
+  }
+
+  lastButtonState = currentButtonState;
 }
 
 void drawGraph() {
@@ -59,7 +69,9 @@ void drawGraph() {
     if (amplitudes[i] > maxAmp) maxAmp = amplitudes[i];
   }
 
-  if (maxAmp == minAmp) maxAmp = minAmp + 1;
+  if (maxAmp <= minAmp) {
+    maxAmp = minAmp + 1;
+  }
 
   for (int i = 0; i < numPoints - 1; i++) {
     int x1 = 10 + (i * 117) / (numPoints - 1);
@@ -77,29 +89,6 @@ void drawGraph() {
   u8g2.sendBuffer();
 }
 
-void checkButton() {
-  bool reading = digitalRead(buttonPin);
-
-  if (lastStableButton == HIGH && reading == LOW) {
-    highPassMode = !highPassMode;
-
-    for (int i = 0; i < numPoints; i++) {
-      amplitudes[i] = 0;
-    }
-
-    showModeMessage();
-    delay(250);
-
-    while (digitalRead(buttonPin) == LOW) {
-      delay(5);
-    }
-
-    delay(50);
-  }
-
-  lastStableButton = reading;
-}
-
 void setup() {
   u8g2.begin();
   pinMode(signalPin, OUTPUT);
@@ -114,16 +103,20 @@ void setup() {
 }
 
 void loop() {
+  checkButton();
+
+  int readPin = highPassMode ? highPassPin : lowPassPin;
+
   for (int i = 0; i < numPoints; i++) {
     checkButton();
+    readPin = highPassMode ? highPassPin : lowPassPin;
 
-    int readPin = highPassMode ? highPassPin : lowPassPin;
     int freq = 50 + i * 50;
 
     tone(signalPin, freq);
-    delay(20);
+    delay(15);
 
-    amplitudes[i] = measureAverage(readPin, 100);
+    amplitudes[i] = measureAverage(readPin, 50);
 
     noTone(signalPin);
     delay(5);
