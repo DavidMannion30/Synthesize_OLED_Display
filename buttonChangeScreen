@@ -9,81 +9,56 @@ const int buttonPin   = 2;
 const int lowPassPin  = A0;
 const int highPassPin = A1;
 
-const int numPoints = 64;
-int amplitudes[numPoints];
-
 bool highPassMode = false;
-bool lastButtonState = HIGH;
 
-int measureAverage(int pin, int samples) {
-  long total = 0;
-  for (int i = 0; i < samples; i++) {
-    total += analogRead(pin);
-  }
-  return total / samples;
-}
+// debounce
+bool lastReading = HIGH;
+bool buttonState = HIGH;
+unsigned long lastDebounceTime = 0;
+const unsigned long debounceDelay = 40;
 
-void showModeMessage() {
-  u8g2.clearBuffer();
-  u8g2.setFont(u8g2_font_6x10_tr);
+// waveform buffer: one y-value for each x pixel
+const int graphWidth = 128;
+int waveY[graphWidth];
 
-  if (highPassMode) {
-    u8g2.drawStr(20, 30, "HIGH PASS");
-  } else {
-    u8g2.drawStr(24, 30, "LOW PASS");
+bool buttonPressed() {
+  bool reading = digitalRead(buttonPin);
+
+  if (reading != lastReading) {
+    lastDebounceTime = millis();
   }
 
-  u8g2.sendBuffer();
-}
-
-void checkButton() {
-  bool currentButtonState = digitalRead(buttonPin);
-
-  if (lastButtonState == HIGH && currentButtonState == LOW) {
-    highPassMode = !highPassMode;
-    showModeMessage();
-    delay(300);
+  if ((millis() - lastDebounceTime) > debounceDelay) {
+    if (reading != buttonState) {
+      buttonState = reading;
+      if (buttonState == LOW) {
+        lastReading = reading;
+        return true;
+      }
+    }
   }
 
-  lastButtonState = currentButtonState;
+  lastReading = reading;
+  return false;
 }
 
-void drawGraph() {
+void drawWaveform() {
   u8g2.clearBuffer();
 
-  u8g2.drawLine(10, 60, 127, 60);
-  u8g2.drawLine(10, 12, 10, 60);
-
+  // title
   u8g2.setFont(u8g2_font_5x7_tr);
   if (highPassMode) {
-    u8g2.drawStr(35, 8, "HIGH PASS");
+    u8g2.drawStr(2, 7, "HIGH PASS");
   } else {
-    u8g2.drawStr(38, 8, "LOW PASS");
+    u8g2.drawStr(2, 7, "LOW PASS");
   }
 
-  int minAmp = 1023;
-  int maxAmp = 0;
+  // mid reference line
+  u8g2.drawLine(0, 36, 127, 36);
 
-  for (int i = 0; i < numPoints; i++) {
-    if (amplitudes[i] < minAmp) minAmp = amplitudes[i];
-    if (amplitudes[i] > maxAmp) maxAmp = amplitudes[i];
-  }
-
-  if (maxAmp <= minAmp) {
-    maxAmp = minAmp + 1;
-  }
-
-  for (int i = 0; i < numPoints - 1; i++) {
-    int x1 = 10 + (i * 117) / (numPoints - 1);
-    int x2 = 10 + ((i + 1) * 117) / (numPoints - 1);
-
-    int y1 = 60 - map(amplitudes[i], minAmp, maxAmp, 0, 48);
-    int y2 = 60 - map(amplitudes[i + 1], minAmp, maxAmp, 0, 48);
-
-    y1 = constrain(y1, 12, 60);
-    y2 = constrain(y2, 12, 60);
-
-    u8g2.drawLine(x1, y1, x2, y2);
+  // waveform
+  for (int x = 0; x < graphWidth - 1; x++) {
+    u8g2.drawLine(x, waveY[x], x + 1, waveY[x + 1]);
   }
 
   u8g2.sendBuffer();
@@ -94,33 +69,37 @@ void setup() {
   pinMode(signalPin, OUTPUT);
   pinMode(buttonPin, INPUT_PULLUP);
 
-  for (int i = 0; i < numPoints; i++) {
-    amplitudes[i] = 0;
-  }
+  // choose one fixed frequency for real-time display
+  tone(signalPin, 200);
 
-  showModeMessage();
-  delay(500);
+  for (int i = 0; i < graphWidth; i++) {
+    waveY[i] = 36;
+  }
 }
 
 void loop() {
-  checkButton();
+  if (buttonPressed()) {
+    highPassMode = !highPassMode;
+  }
 
   int readPin = highPassMode ? highPassPin : lowPassPin;
 
-  for (int i = 0; i < numPoints; i++) {
-    checkButton();
-    readPin = highPassMode ? highPassPin : lowPassPin;
-
-    int freq = 50 + i * 50;
-
-    tone(signalPin, freq);
-    delay(15);
-
-    amplitudes[i] = measureAverage(readPin, 50);
-
-    noTone(signalPin);
-    delay(5);
+  // shift waveform left
+  for (int i = 0; i < graphWidth - 1; i++) {
+    waveY[i] = waveY[i + 1];
   }
 
-  drawGraph();
+  // read current sample
+  int raw = analogRead(readPin);
+
+  // map analog value to OLED y position
+  // lower y = higher on screen
+  int y = map(raw, 0, 1023, 63, 12);
+  y = constrain(y, 12, 63);
+
+  waveY[graphWidth - 1] = y;
+
+  drawWaveform();
+
+  delay(5);
 }
