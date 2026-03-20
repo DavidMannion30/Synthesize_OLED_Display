@@ -28,14 +28,24 @@
 
 // void loop() {}
 
-#include <LiquidCrystal.h>
+#include <U8g2lib.h>
 
-LiquidCrystal lcd(12, 11, 5, 4, 3, 2);
+U8G2_ST7920_128X64_F_SW_SPI u8g2(
+  U8G2_R0,
+  /* clock=*/ 13,
+  /* data=*/ 11,
+  /* CS=*/ 10,
+  /* reset=*/ 8
+);
 
 void setup() {
-  lcd.begin(16, 2);
-  lcd.print("LCD OK");
+  u8g2.begin();
 }
 
 void loop() {
+  u8g2.clearBuffer();
+  u8g2.setFont(u8g2_font_ncenB08_tr);
+  u8g2.drawStr(0, 20, "Hello!");
+  u8g2.sendBuffer();
+  delay(1000);
 }
