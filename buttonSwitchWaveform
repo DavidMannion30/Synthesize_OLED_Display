@@ -28,14 +28,23 @@ int measureAmplitude(int pin, int samples) {
   return maxVal - minVal;
 }
 
+void checkButton() {
+  bool currentButtonState = digitalRead(buttonPin);
+
+  if (lastButtonState == HIGH && currentButtonState == LOW) {
+    highPassMode = !highPassMode;
+    delay(200);
+  }
+
+  lastButtonState = currentButtonState;
+}
+
 void drawGraph() {
   u8g2.clearBuffer();
 
-  // axes
   u8g2.drawLine(10, 60, 127, 60);
   u8g2.drawLine(10, 12, 10, 60);
 
-  // title
   u8g2.setFont(u8g2_font_5x7_tr);
   if (highPassMode) {
     u8g2.drawStr(35, 8, "HIGH PASS");
@@ -43,13 +52,11 @@ void drawGraph() {
     u8g2.drawStr(38, 8, "LOW PASS");
   }
 
-  // scale graph
   int maxAmp = 1;
   for (int i = 0; i < numPoints; i++) {
     if (amplitudes[i] > maxAmp) maxAmp = amplitudes[i];
   }
 
-  // draw graph
   for (int i = 0; i < numPoints - 1; i++) {
     int x1 = 10 + (i * 117) / (numPoints - 1);
     int x2 = 10 + ((i + 1) * 117) / (numPoints - 1);
@@ -70,26 +77,12 @@ void setup() {
 }
 
 void loop() {
-  // check button
-  bool currentButtonState = digitalRead(buttonPin);
+  int readPin = highPassMode ? highPassPin : lowPassPin;
 
-  if (lastButtonState == HIGH && currentButtonState == LOW) {
-    highPassMode = !highPassMode;
-    delay(200); // debounce
-  }
-
-  lastButtonState = currentButtonState;
-
-  // choose which filter output to read
-  int readPin;
-  if (highPassMode) {
-    readPin = highPassPin;  // A1
-  } else {
-    readPin = lowPassPin;   // A0
-  }
-
-  // frequency sweep
   for (int i = 0; i < numPoints; i++) {
+    checkButton();
+    readPin = highPassMode ? highPassPin : lowPassPin;
+
     int freq = 50 + i * 50;
 
     tone(signalPin, freq);
