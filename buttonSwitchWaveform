@@ -1,0 +1,105 @@
+#include <Arduino.h>
+#include <U8g2lib.h>
+#include <SPI.h>
+
+U8G2_SSD1306_128X64_NONAME_F_4W_HW_SPI u8g2(U8G2_R0, 10, 9, 8);
+
+const int signalPin   = 3;
+const int buttonPin   = 2;
+const int lowPassPin  = A0;
+const int highPassPin = A1;
+
+const int numPoints = 64;
+int amplitudes[numPoints];
+
+bool highPassMode = false;
+bool lastButtonState = HIGH;
+
+int measureAmplitude(int pin, int samples) {
+  int minVal = 1023;
+  int maxVal = 0;
+
+  for (int i = 0; i < samples; i++) {
+    int v = analogRead(pin);
+    if (v < minVal) minVal = v;
+    if (v > maxVal) maxVal = v;
+  }
+
+  return maxVal - minVal;
+}
+
+void drawGraph() {
+  u8g2.clearBuffer();
+
+  // axes
+  u8g2.drawLine(10, 60, 127, 60);
+  u8g2.drawLine(10, 12, 10, 60);
+
+  // title
+  u8g2.setFont(u8g2_font_5x7_tr);
+  if (highPassMode) {
+    u8g2.drawStr(35, 8, "HIGH PASS");
+  } else {
+    u8g2.drawStr(38, 8, "LOW PASS");
+  }
+
+  // scale graph
+  int maxAmp = 1;
+  for (int i = 0; i < numPoints; i++) {
+    if (amplitudes[i] > maxAmp) maxAmp = amplitudes[i];
+  }
+
+  // draw graph
+  for (int i = 0; i < numPoints - 1; i++) {
+    int x1 = 10 + (i * 117) / (numPoints - 1);
+    int x2 = 10 + ((i + 1) * 117) / (numPoints - 1);
+
+    int y1 = 60 - map(amplitudes[i], 0, maxAmp, 0, 48);
+    int y2 = 60 - map(amplitudes[i + 1], 0, maxAmp, 0, 48);
+
+    u8g2.drawLine(x1, y1, x2, y2);
+  }
+
+  u8g2.sendBuffer();
+}
+
+void setup() {
+  u8g2.begin();
+  pinMode(signalPin, OUTPUT);
+  pinMode(buttonPin, INPUT_PULLUP);
+}
+
+void loop() {
+  // check button
+  bool currentButtonState = digitalRead(buttonPin);
+
+  if (lastButtonState == HIGH && currentButtonState == LOW) {
+    highPassMode = !highPassMode;
+    delay(200); // debounce
+  }
+
+  lastButtonState = currentButtonState;
+
+  // choose which filter output to read
+  int readPin;
+  if (highPassMode) {
+    readPin = highPassPin;  // A1
+  } else {
+    readPin = lowPassPin;   // A0
+  }
+
+  // frequency sweep
+  for (int i = 0; i < numPoints; i++) {
+    int freq = 50 + i * 50;
+
+    tone(signalPin, freq);
+    delay(20);
+
+    amplitudes[i] = measureAmplitude(readPin, 200);
+
+    noTone(signalPin);
+    delay(5);
+  }
+
+  drawGraph();
+}
