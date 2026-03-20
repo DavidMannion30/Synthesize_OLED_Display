@@ -28,12 +28,31 @@ int measureAmplitude(int pin, int samples) {
   return maxVal - minVal;
 }
 
+void showModeMessage() {
+  u8g2.clearBuffer();
+  u8g2.setFont(u8g2_font_6x10_tr);
+
+  if (highPassMode) {
+    u8g2.drawStr(30, 30, "HIGH PASS");
+  } else {
+    u8g2.drawStr(32, 30, "LOW PASS");
+  }
+
+  u8g2.sendBuffer();
+}
+
 void checkButton() {
   bool currentButtonState = digitalRead(buttonPin);
 
   if (lastButtonState == HIGH && currentButtonState == LOW) {
     highPassMode = !highPassMode;
-    delay(200);
+
+    for (int i = 0; i < numPoints; i++) {
+      amplitudes[i] = 0;
+    }
+
+    showModeMessage();
+    delay(300);
   }
 
   lastButtonState = currentButtonState;
@@ -42,9 +61,11 @@ void checkButton() {
 void drawGraph() {
   u8g2.clearBuffer();
 
+  // axes
   u8g2.drawLine(10, 60, 127, 60);
   u8g2.drawLine(10, 12, 10, 60);
 
+  // title
   u8g2.setFont(u8g2_font_5x7_tr);
   if (highPassMode) {
     u8g2.drawStr(35, 8, "HIGH PASS");
@@ -52,11 +73,15 @@ void drawGraph() {
     u8g2.drawStr(38, 8, "LOW PASS");
   }
 
+  // scale graph
   int maxAmp = 1;
   for (int i = 0; i < numPoints; i++) {
-    if (amplitudes[i] > maxAmp) maxAmp = amplitudes[i];
+    if (amplitudes[i] > maxAmp) {
+      maxAmp = amplitudes[i];
+    }
   }
 
+  // draw graph lines
   for (int i = 0; i < numPoints - 1; i++) {
     int x1 = 10 + (i * 117) / (numPoints - 1);
     int x2 = 10 + ((i + 1) * 117) / (numPoints - 1);
@@ -74,6 +99,13 @@ void setup() {
   u8g2.begin();
   pinMode(signalPin, OUTPUT);
   pinMode(buttonPin, INPUT_PULLUP);
+
+  for (int i = 0; i < numPoints; i++) {
+    amplitudes[i] = 0;
+  }
+
+  showModeMessage();
+  delay(500);
 }
 
 void loop() {
@@ -83,7 +115,7 @@ void loop() {
     checkButton();
     readPin = highPassMode ? highPassPin : lowPassPin;
 
-    int freq = 50 + i * 50;
+    int freq = 50 + i * 50;   // 50 Hz to about 3200 Hz
 
     tone(signalPin, freq);
     delay(20);
@@ -95,35 +127,4 @@ void loop() {
   }
 
   drawGraph();
-}
-
-
-#include <Arduino.h>
-
-const int buttonPin = 2;
-bool highPassMode = false;
-bool lastButtonState = HIGH;
-
-void setup() {
-  Serial.begin(9600);
-  pinMode(buttonPin, INPUT_PULLUP);
-  Serial.println("Starting");
-}
-
-void loop() {
-  bool currentButtonState = digitalRead(buttonPin);
-
-  if (lastButtonState == HIGH && currentButtonState == LOW) {
-    highPassMode = !highPassMode;
-
-    if (highPassMode) {
-      Serial.println("HIGH PASS");
-    } else {
-      Serial.println("LOW PASS");
-    }
-
-    delay(200);
-  }
-
-  lastButtonState = currentButtonState;
 }
