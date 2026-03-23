@@ -1,0 +1,10 @@
+void setup() {
+  display.begin();
+}
+
+void loop() {
+  display.clearBuffer();
+  display.setFont(u8g2_font_ncenB08_tr);
+  display.drawStr(10, 30, "HELLO");
+  display.sendBuffer();
+}
