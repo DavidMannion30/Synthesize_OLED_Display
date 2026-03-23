@@ -1,0 +1,91 @@
+#include <Arduino.h>
+#include <U8g2lib.h>
+#include <SPI.h>
+
+// ===== DISPLAY (your wiring) =====
+U8G2_SSD1309_128X64_NONAME0_F_4W_HW_SPI display(
+  U8G2_R0,
+  10, // CS
+  9,  // DC
+  8   // RESET
+);
+
+// ===== SETTINGS =====
+#define SIGNAL_PIN A0
+
+const int SCREEN_W = 128;
+const int SCREEN_H = 64;
+
+uint8_t waveform[SCREEN_W];
+
+// Graph area
+const int GRAPH_TOP = 10;
+const int GRAPH_BOTTOM = 63;
+
+// Adjust speed here
+unsigned int sampleDelayUs = 1200;
+
+// ===== FUNCTIONS =====
+
+// Shift waveform left
+void shiftLeft() {
+  for (int i = 0; i < SCREEN_W - 1; i++) {
+    waveform[i] = waveform[i + 1];
+  }
+}
+
+// Convert ADC → screen Y
+uint8_t adcToY(int val) {
+  return map(val, 0, 1023, GRAPH_BOTTOM, GRAPH_TOP);
+}
+
+// Draw grid
+void drawGrid() {
+  display.drawFrame(0, GRAPH_TOP, SCREEN_W, GRAPH_BOTTOM - GRAPH_TOP);
+
+  // Middle line
+  int mid = (GRAPH_TOP + GRAPH_BOTTOM) / 2;
+  for (int x = 0; x < SCREEN_W; x += 4) {
+    display.drawPixel(x, mid);
+  }
+}
+
+// Draw waveform
+void drawWave() {
+  for (int x = 0; x < SCREEN_W - 1; x++) {
+    display.drawLine(x, waveform[x], x + 1, waveform[x + 1]);
+  }
+}
+
+// ===== SETUP =====
+void setup() {
+  display.begin();
+  display.setFont(u8g2_font_5x8_tf);
+
+  // Initialize flat line
+  for (int i = 0; i < SCREEN_W; i++) {
+    waveform[i] = (GRAPH_TOP + GRAPH_BOTTOM) / 2;
+  }
+}
+
+// ===== LOOP =====
+void loop() {
+  int val = analogRead(SIGNAL_PIN);
+
+  shiftLeft();
+  waveform[SCREEN_W - 1] = adcToY(val);
+
+  display.clearBuffer();
+
+  // Header
+  display.setCursor(0, 8);
+  display.print("RC Scope");
+
+  // Draw
+  drawGrid();
+  drawWave();
+
+  display.sendBuffer();
+
+  delayMicroseconds(sampleDelayUs);
+}
