@@ -4,52 +4,63 @@
 
 U8G2_SSD1306_128X64_NONAME_F_4W_HW_SPI u8g2(U8G2_R0, 10, 9, 8);
 
-const int signalPin   = 3;
+// Pins
 const int buttonPin   = 2;
 const int lowPassPin  = A0;
 const int highPassPin = A1;
 
-const int numPoints = 64;
-int amplitudes[numPoints];
+// Waveform settings
+const int numSamples = 128;
+int samples[numSamples];
 
-bool highPassMode = false;
-bool lastButtonState = HIGH;
+bool showHighPass = false;
+bool lastReading = HIGH;
+bool buttonState = HIGH;
 
-int measureAverage(int pin, int samples) {
-  long total = 0;
-  for (int i = 0; i < samples; i++) {
-    total += analogRead(pin);
+unsigned long lastDebounceTime = 0;
+const unsigned long debounceDelay = 50;
+
+// Sample spacing in microseconds
+const unsigned int sampleDelayUs = 200;
+
+void captureWaveform(int pin) {
+  unsigned long startMicros = micros();
+
+  for (int i = 0; i < numSamples; i++) {
+    while ((micros() - startMicros) < (unsigned long)(i * sampleDelayUs)) {
+      // wait
+    }
+    samples[i] = analogRead(pin);
   }
-  return total / samples;
 }
 
-void drawGraph() {
+void drawWaveform() {
   u8g2.clearBuffer();
-
-  // Axes
-  u8g2.drawLine(10, 60, 127, 60);
-  u8g2.drawLine(10, 10, 10, 60);
-
   u8g2.setFont(u8g2_font_5x7_tr);
 
-  if (highPassMode)
-    u8g2.drawStr(35, 8, "HIGH PASS");
-  else
-    u8g2.drawStr(38, 8, "LOW PASS");
+  if (showHighPass) {
+    u8g2.drawStr(38, 8, "HIGH PASS");
+  } else {
+    u8g2.drawStr(42, 8, "LOW PASS");
+  }
 
-  // Fixed scale
-  int minAmp = 0;
-  int maxAmp = 1023;
+  // graph area
+  int top = 14;
+  int bottom = 63;
+  int height = bottom - top;
 
-  for (int i = 0; i < numPoints - 1; i++) {
-    int x1 = 10 + (i * 117) / (numPoints - 1);
-    int x2 = 10 + ((i + 1) * 117) / (numPoints - 1);
+  u8g2.drawFrame(0, top, 128, height);
+  u8g2.drawLine(0, top + height / 2, 127, top + height / 2);
 
-    int y1 = 60 - map(amplitudes[i], minAmp, maxAmp, 0, 48);
-    int y2 = 60 - map(amplitudes[i + 1], minAmp, maxAmp, 0, 48);
+  for (int i = 0; i < numSamples - 1; i++) {
+    int x1 = i;
+    int x2 = i + 1;
 
-    y1 = constrain(y1, 10, 60);
-    y2 = constrain(y2, 10, 60);
+    int y1 = map(samples[i], 0, 1023, bottom - 1, top + 1);
+    int y2 = map(samples[i + 1], 0, 1023, bottom - 1, top + 1);
+
+    y1 = constrain(y1, top + 1, bottom - 1);
+    y2 = constrain(y2, top + 1, bottom - 1);
 
     u8g2.drawLine(x1, y1, x2, y2);
   }
@@ -57,72 +68,58 @@ void drawGraph() {
   u8g2.sendBuffer();
 }
 
-void measureFilter() {
-  int readPin = highPassMode ? highPassPin : lowPassPin;
+void checkButton() {
+  bool reading = digitalRead(buttonPin);
 
-  Serial.println();
-  Serial.println("--------------------------------");
-  if (highPassMode)
-    Serial.println("Measuring HIGH PASS filter");
-  else
-    Serial.println("Measuring LOW PASS filter");
-  Serial.println("Freq(Hz)\tAmplitude");
-
-  for (int i = 0; i < numPoints; i++) {
-    int freq = 5 + i * 5;   // 5 Hz to about 320 Hz
-
-    tone(signalPin, freq);
-    delay(40);
-
-    int amp = measureAverage(readPin, 200);
-    amplitudes[i] = amp;   // needed for OLED graph
-
-    // Live print to Serial Monitor
-    Serial.print(freq);
-    Serial.print("\t\t");
-    Serial.println(amp);
-
-    noTone(signalPin);
-    delay(10);
+  if (reading != lastReading) {
+    lastDebounceTime = millis();
   }
 
-  drawGraph();
+  if ((millis() - lastDebounceTime) > debounceDelay) {
+    if (reading != buttonState) {
+      buttonState = reading;
+
+      if (buttonState == LOW) {
+        Serial.println("Button pressed");
+        showHighPass = !showHighPass;
+
+        if (showHighPass) {
+          Serial.println("Showing HIGH PASS");
+        } else {
+          Serial.println("Showing LOW PASS");
+        }
+      } else {
+        Serial.println("Button released");
+      }
+    }
+  }
+
+  lastReading = reading;
 }
 
 void setup() {
   Serial.begin(9600);
 
-  u8g2.begin();
-  pinMode(signalPin, OUTPUT);
   pinMode(buttonPin, INPUT_PULLUP);
 
-  Serial.println("System started");
-  Serial.println("Button state: NOT PRESSED");
+  u8g2.begin();
 
-  measureFilter();
+  Serial.println("OLED started");
+  Serial.println("Initial mode: LOW PASS");
+
+  // startup screen
+  u8g2.clearBuffer();
+  u8g2.setFont(u8g2_font_5x7_tr);
+  u8g2.drawStr(20, 20, "Waveform Viewer");
+  u8g2.drawStr(30, 35, "Starting...");
+  u8g2.sendBuffer();
+  delay(1000);
 }
 
 void loop() {
-  bool currentButtonState = digitalRead(buttonPin);
+  checkButton();
 
-  // Show button state live
-  if (currentButtonState == LOW && lastButtonState == HIGH) {
-    Serial.println("Button pressed");
-
-    highPassMode = !highPassMode;
-
-    if (highPassMode)
-      Serial.println("Switched to HIGH PASS mode");
-    else
-      Serial.println("Switched to LOW PASS mode");
-
-    delay(200); // debounce
-    measureFilter();
-  }
-
-  if (currentButtonState == HIGH && lastButtonState == LOW) {
-    Serial.println("Button released");
-  }
-
-  lastButtonState = currentButtonState;
+  int activePin = showHighPass ? highPassPin : lowPassPin;
+  captureWaveform(activePin);
+  drawWaveform();
 }
