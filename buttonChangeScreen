@@ -26,7 +26,7 @@ int measureAverage(int pin, int samples) {
 void drawGraph() {
   u8g2.clearBuffer();
 
-  // axes
+  // Axes
   u8g2.drawLine(10, 60, 127, 60);
   u8g2.drawLine(10, 10, 10, 60);
 
@@ -37,7 +37,7 @@ void drawGraph() {
   else
     u8g2.drawStr(38, 8, "LOW PASS");
 
-  // FIXED SCALE (important)
+  // Fixed scale
   int minAmp = 0;
   int maxAmp = 1023;
 
@@ -60,15 +60,27 @@ void drawGraph() {
 void measureFilter() {
   int readPin = highPassMode ? highPassPin : lowPassPin;
 
-  for (int i = 0; i < numPoints; i++) {
+  Serial.println();
+  Serial.println("--------------------------------");
+  if (highPassMode)
+    Serial.println("Measuring HIGH PASS filter");
+  else
+    Serial.println("Measuring LOW PASS filter");
+  Serial.println("Freq(Hz)\tAmplitude");
 
-    // VERY IMPORTANT: low frequencies
-    int freq = 5 + i * 5;   // 5 Hz → ~320 Hz
+  for (int i = 0; i < numPoints; i++) {
+    int freq = 5 + i * 5;   // 5 Hz to about 320 Hz
 
     tone(signalPin, freq);
     delay(40);
 
-    amplitudes[i] = measureAverage(readPin, 200);
+    int amp = measureAverage(readPin, 200);
+    amplitudes[i] = amp;   // needed for OLED graph
+
+    // Live print to Serial Monitor
+    Serial.print(freq);
+    Serial.print("\t\t");
+    Serial.println(amp);
 
     noTone(signalPin);
     delay(10);
@@ -78,24 +90,38 @@ void measureFilter() {
 }
 
 void setup() {
+  Serial.begin(9600);
+
   u8g2.begin();
   pinMode(signalPin, OUTPUT);
   pinMode(buttonPin, INPUT_PULLUP);
+
+  Serial.println("System started");
+  Serial.println("Button state: NOT PRESSED");
 
   measureFilter();
 }
 
 void loop() {
-
   bool currentButtonState = digitalRead(buttonPin);
 
-  if (lastButtonState == HIGH && currentButtonState == LOW) {
+  // Show button state live
+  if (currentButtonState == LOW && lastButtonState == HIGH) {
+    Serial.println("Button pressed");
+
     highPassMode = !highPassMode;
 
-    // small debounce
-    delay(200);
+    if (highPassMode)
+      Serial.println("Switched to HIGH PASS mode");
+    else
+      Serial.println("Switched to LOW PASS mode");
 
+    delay(200); // debounce
     measureFilter();
+  }
+
+  if (currentButtonState == HIGH && lastButtonState == LOW) {
+    Serial.println("Button released");
   }
 
   lastButtonState = currentButtonState;
