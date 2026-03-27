@@ -1,0 +1,155 @@
+#include <Arduino.h>
+#include <U8g2lib.h>
+#include <SPI.h>
+
+// ===== DISPLAY =====
+U8G2_SSD1309_128X64_NONAME0_F_4W_HW_SPI display(
+  U8G2_R0,
+  10, // CS
+  9,  // DC
+  8   // RESET
+);
+
+// ===== SETTINGS =====
+const int BUTTON_PIN = 2;
+const int CHANNEL_0 = A0;
+const int CHANNEL_1 = A1;
+
+int currentChannel = CHANNEL_0;
+
+const int SCREEN_W = 128;
+uint8_t waveform[SCREEN_W];
+
+// Graph area
+const int GRAPH_TOP = 10;
+const int GRAPH_BOTTOM = 63;
+const int GRAPH_HEIGHT = GRAPH_BOTTOM - GRAPH_TOP;
+const int MID_Y = (GRAPH_TOP + GRAPH_BOTTOM) / 2;
+
+// ADC midpoint for 5V Arduino (biased signal centered at 2.5V)
+const int ADC_MID = 512;
+
+// Adjust speed here
+unsigned int sampleDelayUs = 1200;
+
+// Button debounce
+bool lastButtonState = HIGH;
+bool buttonState = HIGH;
+unsigned long lastDebounceTime = 0;
+const unsigned long debounceDelay = 50;
+
+// ===== FUNCTIONS =====
+
+// Shift waveform left
+void shiftLeft() {
+  for (int i = 0; i < SCREEN_W - 1; i++) {
+    waveform[i] = waveform[i + 1];
+  }
+}
+
+// Convert ADC value to screen Y, centered around ADC_MID
+uint8_t adcToY(int val) {
+  val = constrain(val, 0, 1023);
+
+  // Move midpoint to zero
+  int centered = val - ADC_MID;
+
+  // Scale around screen midpoint
+  int y = MID_Y - (centered * GRAPH_HEIGHT) / 1024;
+
+  return constrain(y, GRAPH_TOP, GRAPH_BOTTOM);
+}
+
+// Draw grid and center reference line
+void drawGrid() {
+  display.drawFrame(0, GRAPH_TOP, SCREEN_W, GRAPH_BOTTOM - GRAPH_TOP);
+
+  // Center line = biased "zero" for audio
+  for (int x = 0; x < SCREEN_W; x += 4) {
+    display.drawPixel(x, MID_Y);
+  }
+
+  // Vertical grid markers
+  for (int x = 16; x < SCREEN_W; x += 16) {
+    for (int y = GRAPH_TOP; y < GRAPH_BOTTOM; y += 4) {
+      display.drawPixel(x, y);
+    }
+  }
+}
+
+// Draw waveform
+void drawWave() {
+  for (int x = 0; x < SCREEN_W - 1; x++) {
+    display.drawLine(x, waveform[x], x + 1, waveform[x + 1]);
+  }
+}
+
+void clearWaveform() {
+  for (int i = 0; i < SCREEN_W; i++) {
+    waveform[i] = MID_Y;
+  }
+}
+
+void handleButton() {
+  int reading = digitalRead(BUTTON_PIN);
+
+  if (reading != lastButtonState) {
+    lastDebounceTime = millis();
+  }
+
+  if ((millis() - lastDebounceTime) > debounceDelay) {
+    if (reading != buttonState) {
+      buttonState = reading;
+
+      if (buttonState == LOW) {
+        if (currentChannel == CHANNEL_0) {
+          currentChannel = CHANNEL_1;
+        } else {
+          currentChannel = CHANNEL_0;
+        }
+        clearWaveform();
+      }
+    }
+  }
+
+  lastButtonState = reading;
+}
+
+// ===== SETUP =====
+void setup() {
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+
+  display.begin();
+  display.setFont(u8g2_font_5x8_tf);
+
+  clearWaveform();
+}
+
+// ===== LOOP =====
+void loop() {
+  handleButton();
+
+  int val = analogRead(currentChannel);
+
+  shiftLeft();
+  waveform[SCREEN_W - 1] = adcToY(val);
+
+  display.clearBuffer();
+
+  // Header
+  display.setCursor(0, 8);
+  display.print("RC Scope  ");
+
+  if (currentChannel == CHANNEL_0) {
+    display.print("A0");
+  } else {
+    display.print("A1");
+  }
+
+  drawGrid();
+  drawWave();
+
+  display.sendBuffer();
+
+  delayMicroseconds(sampleDelayUs);
+}
