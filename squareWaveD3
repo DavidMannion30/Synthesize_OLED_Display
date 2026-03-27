@@ -29,7 +29,7 @@ const int GRAPH_BOTTOM = 63;
 unsigned int sampleDelayUs = 1200;
 
 // Test signal frequency
-unsigned int testFrequencyHz = 500;
+unsigned int testFrequencyHz = 250;
 
 // Button debounce
 bool lastButtonState = HIGH;
