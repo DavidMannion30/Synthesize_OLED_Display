@@ -5,5 +5,8 @@ void setup() {
 }
 
 void loop() {
-  analogWrite(outputPin, 128); // constant tone
+  digitalWrite(outputPin, HIGH);
+  delayMicroseconds(500);
+  digitalWrite(outputPin, LOW);
+  delayMicroseconds(500);
 }
