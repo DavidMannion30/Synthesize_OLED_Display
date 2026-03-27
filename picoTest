@@ -1,12 +1,10 @@
-const int outputPin = 15;
-
 void setup() {
-  pinMode(outputPin, OUTPUT);
+  pinMode(25, OUTPUT);  // built-in LED
 }
 
 void loop() {
-  digitalWrite(outputPin, HIGH);
-  delayMicroseconds(500);
-  digitalWrite(outputPin, LOW);
-  delayMicroseconds(500);
+  digitalWrite(25, HIGH);
+  delay(500);
+  digitalWrite(25, LOW);
+  delay(500);
 }
