@@ -2,11 +2,13 @@ const int outputPin = 15;
 
 void setup() {
   pinMode(outputPin, OUTPUT);
+  Serial.begin(115200);
 }
 
 void loop() {
+  Serial.println("beep");
   digitalWrite(outputPin, HIGH);
-  delayMicroseconds(500);
+  delayMicroseconds(250);
   digitalWrite(outputPin, LOW);
-  delayMicroseconds(500);
+  delayMicroseconds(250);
 }
