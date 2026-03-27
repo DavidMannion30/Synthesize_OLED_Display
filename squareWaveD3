@@ -52,6 +52,11 @@ uint8_t adcToY(int val) {
   return map(val, 0, 1023, GRAPH_BOTTOM, GRAPH_TOP);
 }
 
+// Convert ADC -> voltage
+float adcToVoltage(int val) {
+  return val * (5.0 / 1023.0);
+}
+
 // Draw grid
 void drawGrid() {
   display.drawFrame(0, GRAPH_TOP, SCREEN_W, GRAPH_BOTTOM - GRAPH_TOP);
@@ -137,19 +142,20 @@ void setup() {
 
 // ===== LOOP =====
 void loop() {
-  generateSignal();   // create test signal on D3
+  generateSignal();
   handleButton();
 
   int val = analogRead(currentChannel);
+  float voltage = adcToVoltage(val);
 
   shiftLeft();
   waveform[SCREEN_W - 1] = adcToY(val);
 
   display.clearBuffer();
 
-  // Header
+  // Header line 1
   display.setCursor(0, 8);
-  display.print("RC Scope ");
+  display.print("RC ");
 
   if (currentChannel == CHANNEL_0) {
     display.print("A0 ");
@@ -159,6 +165,11 @@ void loop() {
 
   display.print(testFrequencyHz);
   display.print("Hz");
+
+  // Header line 2
+  display.setCursor(0, 16);
+  display.print(voltage, 2);
+  display.print("V");
 
   drawGrid();
   drawWave();
