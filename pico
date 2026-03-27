@@ -1,29 +1,29 @@
-// ===== Pico Minimal Looper Test =====
+// ===== Pico Looper (Stable Version) =====
 // Input:  Potentiometer on GP26 (ADC0)
 // Output: PWM audio on GP15
 
-const int inputPin = 26;   // GP26 (ADC0)
-const int outputPin = 15;  // GP15 (PWM)
+const int inputPin = 26;
+const int outputPin = 15;
 
-const int sampleRate = 8000;     // 8 kHz
-const int loopSeconds = 3;       // change to 5 later
+const int sampleRate = 8000;   // 8 kHz
+const int loopSeconds = 3;     // change to 5 if you want
 const int numSamples = sampleRate * loopSeconds;
 
 uint8_t buffer[numSamples];
 
 void setup() {
   pinMode(outputPin, OUTPUT);
-  
 
-  analogReadResolution(12);   // 0–4095
-  analogWriteRange(255);      // 8-bit output
+  // Set PWM for audio
+  analogWriteFreq(62500);   // high PWM carrier (important)
+  analogWriteRange(255);    // 8-bit output
 
-  delay(1000); // give time before recording
+  delay(1000); // time before recording
 
   // ===== RECORD =====
   for (int i = 0; i < numSamples; i++) {
-    int raw = analogRead(inputPin);   // read pot (0–4095)
-    buffer[i] = raw >> 4;             // convert to 0–255
+    int raw = analogRead(inputPin);   // 0–4095 typically
+    buffer[i] = raw >> 4;             // convert to 8-bit (0–255)
 
     delayMicroseconds(1000000 / sampleRate);
   }
@@ -33,7 +33,7 @@ void loop() {
   // ===== PLAYBACK LOOP =====
   for (int i = 0; i < numSamples; i++) {
     analogWrite(outputPin, buffer[i]);
+
     delayMicroseconds(1000000 / sampleRate);
   }
 }
-
